@@ -14,7 +14,7 @@ from typing import Any
 
 import requests
 
-API_VERSION = os.environ.get("META_API_VERSION", "v26.0")
+API_VERSION = os.environ.get("META_API_VERSION") or "v26.0"
 
 
 def require(*names: str) -> dict[str, str]:
