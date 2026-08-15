@@ -1,0 +1,46 @@
+{
+  "topics": [
+    {
+      "id": "sleep-memory-01",
+      "topic": "Sleep, memory consolidation, and everyday learning",
+      "angle": "Explain the difference between learning during the day and memory consolidation during sleep.",
+      "domain": "neuroscience",
+      "sources": ["https://www.nhlbi.nih.gov/health/sleep/why-sleep-important"]
+    },
+    {
+      "id": "stress-breathing-01",
+      "topic": "Stress responses and slow breathing",
+      "angle": "Explain what a slow breathing practice may do for short-term stress regulation without promising treatment.",
+      "domain": "mental_health",
+      "sources": ["https://www.nimh.nih.gov/health/publications/so-stressed-out-fact-sheet"]
+    },
+    {
+      "id": "protein-fiber-01",
+      "topic": "Protein, fiber, and satiety",
+      "angle": "Explain broad nutrition concepts and the importance of individual needs rather than prescribing a diet.",
+      "domain": "diet",
+      "sources": ["https://www.niddk.nih.gov/health-information/weight-management/just-enough-for-you"]
+    },
+    {
+      "id": "habit-cues-01",
+      "topic": "Habit cues and behavior change",
+      "angle": "Explain how environment and cues can influence repeated behavior, with practical but non-clinical examples.",
+      "domain": "psychology",
+      "sources": ["https://www.nia.nih.gov/health/brain-health/cognitive-health-and-older-adults"]
+    },
+    {
+      "id": "attention-switching-01",
+      "topic": "Attention switching and deep work",
+      "angle": "Explain why frequent task switching can feel productive while reducing sustained attention.",
+      "domain": "neuroscience",
+      "sources": ["https://www.ninds.nih.gov/health-information/disorders/attention-deficit-hyperactivity-disorder-adhd"]
+    },
+    {
+      "id": "social-connection-01",
+      "topic": "Social connection and wellbeing",
+      "angle": "Present the association between supportive relationships and wellbeing without implying a cure or guaranteed outcome.",
+      "domain": "mental_health",
+      "sources": ["https://www.cdc.gov/social-connectedness/about/index.html"]
+    }
+  ]
+}

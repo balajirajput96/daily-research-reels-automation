@@ -1,0 +1,94 @@
+name: Daily research Reel
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 03:30 UTC = 09:00 IST. GitHub schedules are best-effort windows.
+    - cron: "30 3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-research-reel
+  cancel-in-progress: false
+
+jobs:
+  produce-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out automation
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Prepare source media
+        env:
+          SOURCE_MEDIA_URL: ${{ secrets.SOURCE_MEDIA_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_MEDIA_URL" || { echo "BLOCKED: SOURCE_MEDIA_URL is not configured"; exit 1; }
+          mkdir -p artifacts
+          curl --fail --location --retry 3 --max-time 300 "$SOURCE_MEDIA_URL" --output artifacts/source.mp4
+          test -s artifacts/source.mp4
+
+      - name: Generate source-grounded Hinglish script
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+        run: |
+          set -euo pipefail
+          python scripts/generate_script.py --topics config/topics.json --output artifacts/script.json
+
+      - name: Render 9:16 Reel
+        env:
+          BGM_URL: ${{ secrets.BGM_URL }}
+        run: |
+          set -euo pipefail
+          if [ -n "$BGM_URL" ]; then curl --fail --location --retry 3 --max-time 180 "$BGM_URL" --output artifacts/bgm.wav; fi
+          if [ -s artifacts/bgm.wav ]; then
+            python scripts/render_reel.py --input artifacts/source.mp4 --script artifacts/script.json --bgm artifacts/bgm.wav --output artifacts/reel.mp4
+          else
+            python scripts/render_reel.py --input artifacts/source.mp4 --script artifacts/script.json --output artifacts/reel.mp4
+          fi
+
+      - name: Validate output
+        run: python scripts/validate_reel.py artifacts/reel.mp4
+
+      - name: Publish to Instagram and Facebook Page
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          META_IG_ACCESS_TOKEN: ${{ secrets.META_IG_ACCESS_TOKEN }}
+          META_IG_USER_ID: ${{ secrets.META_IG_USER_ID }}
+          META_FB_PAGE_ACCESS_TOKEN: ${{ secrets.META_FB_PAGE_ACCESS_TOKEN }}
+          META_FB_PAGE_ID: ${{ secrets.META_FB_PAGE_ID }}
+          PUBLIC_MEDIA_URL: ${{ secrets.PUBLIC_MEDIA_URL }}
+          META_API_VERSION: ${{ vars.META_API_VERSION }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          data = json.load(open("artifacts/script.json", encoding="utf-8"))
+          open("artifacts/caption.txt", "w", encoding="utf-8").write(data["script"]["caption"])
+          PY
+          python scripts/publish_meta.py --video artifacts/reel.mp4 --caption "$(cat artifacts/caption.txt)" --platforms instagram,facebook_page | tee artifacts/publish_result.json
+
+      - name: Upload audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-research-reel-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14

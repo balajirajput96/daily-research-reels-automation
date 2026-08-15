@@ -1,0 +1,8 @@
+artifacts/
+.env
+*.mp4
+*.mov
+*.wav
+*.mp3
+__pycache__/
+*.pyc
