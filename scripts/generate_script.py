@@ -75,6 +75,23 @@ Rules:
 
 
 def validate_script(result: dict[str, Any], topic: dict[str, Any]) -> None:
+    if not isinstance(result, dict):
+        raise RuntimeError("Generated script must be a JSON object")
+    required = {"title", "hook", "spoken_script", "on_screen_lines", "caption", "claims", "sources", "confidence"}
+    missing = required.difference(result)
+    if missing:
+        raise RuntimeError(f"Generated script missing keys: {sorted(missing)}")
+    for field in ("title", "hook", "spoken_script", "caption", "confidence"):
+        if not isinstance(result[field], str) or not result[field].strip():
+            raise RuntimeError(f"Generated script field {field} must be a non-empty string")
+    if not isinstance(result["on_screen_lines"], list) or not all(
+        isinstance(line, str) and line.strip() for line in result["on_screen_lines"]
+    ):
+        raise RuntimeError("On-screen lines must be a non-empty string array")
+    if not isinstance(result["claims"], list) or not result["claims"]:
+        raise RuntimeError("Generated claims must be a non-empty array")
+    if not isinstance(result["sources"], list) or not all(isinstance(source, str) for source in result["sources"]):
+        raise RuntimeError("Generated sources must be a string array")
     spoken = str(result["spoken_script"])
     caption = str(result["caption"])
     if not 120 <= len(spoken.split()) <= 180:
@@ -85,8 +102,12 @@ def validate_script(result: dict[str, Any], topic: dict[str, Any]) -> None:
         raise RuntimeError("Required AI disclosure is missing")
     allowed = set(topic.get("sources", []))
     for claim in result["claims"]:
+        if not isinstance(claim, dict) or not isinstance(claim.get("text"), str) or not claim["text"].strip():
+            raise RuntimeError("Every generated claim must include non-empty text")
         if claim.get("source_url") not in allowed:
             raise RuntimeError("Generated claim cites a URL outside the approved source list")
+        if not isinstance(claim.get("confidence"), str) or not claim["confidence"].strip():
+            raise RuntimeError("Every generated claim must include a confidence label")
     if not set(result["sources"]).issubset(allowed):
         raise RuntimeError("Generated sources contain an unapproved URL")
 
