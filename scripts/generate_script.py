@@ -120,7 +120,7 @@ def main() -> None:
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise SystemExit("BLOCKED: GEMINI_API_KEY is not configured")
-    model = os.environ.get("GEMINI_MODEL") or "gemini-2.5-flash"
+    model = os.environ.get("GEMINI_MODEL") or "gemini-3.6-flash"
     day = dt.date.today()
     topic = choose_topic(Path(args.topics), day)
     result = call_gemini(topic, model, api_key)
