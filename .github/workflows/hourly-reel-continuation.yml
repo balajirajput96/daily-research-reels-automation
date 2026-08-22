@@ -1,0 +1,107 @@
+name: Hourly research reel continuation
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub scheduled workflows are best-effort. The state file enforces the 2,400-cycle cap.
+    - cron: '0 * * * *'
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: hourly-research-reel-continuation
+  cancel-in-progress: false
+
+jobs:
+  continue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Reserve next bounded cycle
+        id: cycle
+        run: |
+          set -euo pipefail
+          result="$(python scripts/mission_state.py start --state state/mission_state.json --max-cycles 2400)"
+          echo "$result" | tee cycle_result.json
+          python - <<'PY'
+          import json, os
+          data = json.load(open('cycle_result.json', encoding='utf-8'))
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as out:
+              for key in ('should_run', 'cycle', 'reel_id', 'batch'):
+                  if key in data:
+                      out.write(f"{key}={data[key]}\n")
+          PY
+
+      - name: Record Drive configuration status
+        id: drive_config
+        env:
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+        run: |
+          if [[ -n "$GOOGLE_DRIVE_REFRESH_TOKEN" ]]; then echo 'configured=true' >> "$GITHUB_OUTPUT"; else echo 'configured=false' >> "$GITHUB_OUTPUT"; fi
+
+      - name: Record blocked configuration
+        if: ${{ steps.cycle.outputs.should_run == 'true' && steps.drive_config.outputs.configured == 'false' }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path = Path('state/mission_state.json')
+          data = json.loads(path.read_text(encoding='utf-8'))
+          data['last_status'] = 'blocked_missing_google_drive_secret'
+          data['last_cycle']['status'] = 'blocked_missing_google_drive_secret'
+          data['last_cycle']['finished_at_utc'] = __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat()
+          path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+          Path('drive_upload_blocker.md').write_text(
+              '# Drive upload blocker\n\nThis cycle did not generate or upload a reel because the repository secret `GOOGLE_DRIVE_REFRESH_TOKEN` is not configured. The workflow fails closed and does not claim Drive completion.\n',
+              encoding='utf-8',
+          )
+          PY
+
+      - name: Run continuation adapter when Drive is configured
+        if: ${{ steps.cycle.outputs.should_run == 'true' && steps.drive_config.outputs.configured == 'true' }}
+        env:
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+          REEL_ID: ${{ steps.cycle.outputs.reel_id }}
+          BATCH_ID: ${{ steps.cycle.outputs.batch }}
+        run: |
+          set -euo pipefail
+          echo 'Drive-enabled continuation adapter is not enabled in this repository yet.'
+          echo 'The cycle remains explicitly blocked rather than producing an unverified reel.'
+          exit 1
+
+      - name: Upload state and blocker artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hourly-reel-cycle-${{ github.run_id }}
+          path: |
+            state/mission_state.json
+            cycle_result.json
+            drive_upload_blocker.md
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Commit state checkpoint
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add state/mission_state.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: checkpoint hourly reel cycle ${GITHUB_RUN_ID}"
+            git push origin HEAD:main
+          fi
